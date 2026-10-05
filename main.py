@@ -5,15 +5,16 @@ import random # importa o movimento aleatório
 import math # a biblioteca de matemática do Python
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+import asyncio
 
-pygame.mixer.pre_init(44100, -16, 2, 512) # (frequency, size, channels, buffer)
+pygame.mixer.pre_init(44100, -16, 2, 4096) # (frequency, size, channels, buffer)
 pygame.init()
 
 LARGURA = 800
 ALTURA = 500
 
 tela = pygame.display.set_mode(
-    (LARGURA, ALTURA)
+    (LARGURA, ALTURA), pygame.SCALED
 )  # Cria o display do jogo conforme o tamanho de tela definido em altura e largura
 pygame.display.set_caption(
     "TACADA!"
@@ -48,20 +49,20 @@ arquibancada = pygame.image.load("imagens/arquibancada.png").convert_alpha()
 # ============================================================
 # CARREGAMENTO DOS SONS
 # ============================================================
-som_bola_ar = pygame.mixer.Sound("sons/air_ball.wav")
-som_taco = pygame.mixer.Sound("sons/bat_hit.wav")
-som_organ = pygame.mixer.Sound("sons/organ_baseball.wav")
-fundo = pygame.mixer.Sound("sons/fundo.wav")
-som_game_over = pygame.mixer.Sound("sons/game_over.wav")
-som_estadio = pygame.mixer.Sound("sons/som_estadio.wav")
+som_bola_ar = pygame.mixer.Sound("sons/air_ball.ogg")
+som_taco = pygame.mixer.Sound("sons/bat_hit.ogg")
+som_organ = pygame.mixer.Sound("sons/organ_baseball.ogg")
+fundo = pygame.mixer.Sound("sons/fundo.ogg")
+som_game_over = pygame.mixer.Sound("sons/game_over.ogg")
+som_estadio = pygame.mixer.Sound("sons/som_estadio.ogg")
 
 
-som_bola_ar.set_volume(0.5)
-som_taco.set_volume(0.8)
-som_organ.set_volume(0.3)
-som_game_over.set_volume(0.6)
-som_estadio.set_volume(0.15)
-fundo.set_volume(0.3)
+som_bola_ar.set_volume(0.3)
+som_taco.set_volume(0.5)
+som_organ.set_volume(0.2)
+som_game_over.set_volume(0.4)
+som_estadio.set_volume(0.1)
+fundo.set_volume(0.2)
 fundo.play(-1)   # -1 = repete para sempre
 
 # ============================================================
@@ -372,348 +373,360 @@ except (FileNotFoundError, ValueError):
 # ============================================================
 # LOOP PRINCIPAL
 # ============================================================
+async def main():
+    global rodando, estado_jogo, tacando, tempo_tacada
+    global bola_rebatida, tipo_tacada, pontuacao
+    global velocidade_x, velocidade_y, bola_subindo, x_maximo_bola
+    global bola_na_zona, x_bola, y_bola, tempo_bola_parada
+    global game_over, fase, velocidade_descida, angulo_tacada, recorde
 
-while rodando:
-    for (
-        evento
-    ) in (
-        pygame.event.get()
-    ):  # Verifica cada evento realizado no jogo, por exemplo, se foi realizado um clique na tela ou apertada uma tecla
+    while rodando:
+        for (
+            evento
+        ) in (
+            pygame.event.get()
+        ):  # Verifica cada evento realizado no jogo, por exemplo, se foi realizado um clique na tela ou apertada uma tecla
 
-        if evento.type == pygame.QUIT:
-            rodando = False
+            if evento.type == pygame.QUIT:
+                rodando = False
 
-        if (
-            evento.type == pygame.MOUSEBUTTONDOWN):  # Indica que haverá uma ação do tipo clique do botão do mouse
-            
-            # Inicia a animação da tacada
-            tacando = True
-            tempo_tacada = pygame.time.get_ticks()
-            
-            # Se estiver na tela inicial, o clique começa o jogo
-            if estado_jogo == "INICIO":
-                estado_jogo = "JOGANDO"
-                fundo.fadeout(800)   # some em 0,8 segundo
-                som_estadio.play(-1, fade_ms=1000)   # entra suavemente e repete
-                som_bola_ar.play()
+            if (
+                evento.type == pygame.MOUSEBUTTONDOWN):  # Indica que haverá uma ação do tipo clique do botão do mouse
+                
+                # Inicia a animação da tacada
+                tacando = True
+                tempo_tacada = pygame.time.get_ticks()
+                
+                # Se estiver na tela inicial, o clique começa o jogo
+                if estado_jogo == "INICIO":
+                    estado_jogo = "JOGANDO"
+                    fundo.fadeout(800)   # some em 0,8 segundo
+                    som_estadio.play(-1, fade_ms=1000)   # entra suavemente e repete
+                    som_bola_ar.play()
 
-            # Se estiver jogando, o clique pode ser uma tacada
-            elif estado_jogo == "JOGANDO":
-                if bola_na_zona and not game_over and not bola_subindo:
-                    # A bola foi rebatida
-                    bola_rebatida = True
-                    som_bola_ar.stop()   # corta o som da bola no ar
-                    som_taco.play()
-                    som_organ.play(maxtime=2100, fade_ms=0)
-                    posicao_na_zona = max(0, min(1, (x_bola - x_zona) / largura_zona))
+                # Se estiver jogando, o clique pode ser uma tacada
+                elif estado_jogo == "JOGANDO":
+                    if bola_na_zona and not game_over and not bola_subindo:
+                        # A bola foi rebatida
+                        bola_rebatida = True
+                        som_bola_ar.stop()   # corta o som da bola no ar
+                        som_taco.play()
+                        som_organ.play(maxtime=2100, fade_ms=0)
+                        posicao_na_zona = max(0, min(1, (x_bola - x_zona) / largura_zona))
 
-                    if posicao_na_zona >= LIMITE_PERFEITA:
-                        tipo_tacada = "PERFEITA"
-                    elif posicao_na_zona >= LIMITE_BOA:
-                        tipo_tacada = "BOA"
-                    else:
-                        tipo_tacada = "FRACA"
+                        if posicao_na_zona >= LIMITE_PERFEITA:
+                            tipo_tacada = "PERFEITA"
+                        elif posicao_na_zona >= LIMITE_BOA:
+                            tipo_tacada = "BOA"
+                        else:
+                            tipo_tacada = "FRACA"
 
-                    cfg = TACADAS[tipo_tacada]
-                    pontuacao += cfg["pontos"]
+                        cfg = TACADAS[tipo_tacada]
+                        pontuacao += cfg["pontos"]
 
-                    angulo_rad = math.radians(random.uniform(*cfg["desvio"]))
-                    velocidade_x = -cfg["velocidade"] * math.cos(angulo_rad)
-                    velocidade_y = random.choice([-1, 1]) * cfg["velocidade"] * math.sin(angulo_rad)
+                        angulo_rad = math.radians(random.uniform(*cfg["desvio"]))
+                        velocidade_x = -cfg["velocidade"] * math.cos(angulo_rad)
+                        velocidade_y = random.choice([-1, 1]) * cfg["velocidade"] * math.sin(angulo_rad)
 
-                    bola_subindo = True
-                    x_maximo_bola = x_bola - cfg["distancia"]
+                        bola_subindo = True
+                        x_maximo_bola = x_bola - cfg["distancia"]
 
+
+            # ============================================================
+            # DEFINICAO DA TECLA DE REINICIO DO JOGO
+            # ============================================================
+            if (
+                evento.type == pygame.KEYDOWN
+            ):  # Indica que o jogo irá ter uma tecla para pressionar que reiniciará o jogo
+                if evento.key == pygame.K_F5:
+                    reiniciar_jogo()
 
         # ============================================================
-        # DEFINICAO DA TECLA DE REINICIO DO JOGO
+        # ALTERAÇAO DA FASE DE ACORDO COM A PONTUACAO TOTAL
         # ============================================================
-        if (
-            evento.type == pygame.KEYDOWN
-        ):  # Indica que o jogo irá ter uma tecla para pressionar que reiniciará o jogo
-            if evento.key == pygame.K_F5:
-                reiniciar_jogo()
-
-    # ============================================================
-    # ALTERAÇAO DA FASE DE ACORDO COM A PONTUACAO TOTAL
-    # ============================================================
-    
-    if estado_jogo == "JOGANDO": # Só executa a lógica da bola durante a partida
         
-       # Define a fase de acordo com a pontuação (máximo fase 5)
-        fase = min(pontuacao // 500 + 1, 5)
-        velocidade_descida = 2 + fase
+        if estado_jogo == "JOGANDO": # Só executa a lógica da bola durante a partida
+            
+        # Define a fase de acordo com a pontuação (máximo fase 5)
+            fase = min(pontuacao // 500 + 1, 5)
+            velocidade_descida = 2 + fase
 
-        # ============================================================
-        # MOVIMENTACAO DA BOLA
-        # ============================================================
-        if not game_over:
+            # ============================================================
+            # MOVIMENTACAO DA BOLA
+            # ============================================================
+            if not game_over:
 
-            x_bola = x_bola + velocidade_x
-            y_bola = y_bola + velocidade_y
+                x_bola = x_bola + velocidade_x
+                y_bola = y_bola + velocidade_y
 
-        # Verifica se a bola chegou ao limite da subida
-        if bola_subindo and x_bola <= x_maximo_bola and tempo_bola_parada == 0:
+            # Verifica se a bola chegou ao limite da subida
+            if bola_subindo and x_bola <= x_maximo_bola and tempo_bola_parada == 0:
 
-            # Para a bola
-            velocidade_x = 0
-            velocidade_y = 0
-
-            # Guarda o momento em que a bola parou
-            tempo_bola_parada = pygame.time.get_ticks()
-
-
-            # Verifica se a bola terminou sua subida
-        if bola_subindo and velocidade_x == 0 and velocidade_y == 0:
-
-            # Pega o tempo atual
-            tempo_atual = pygame.time.get_ticks()
-
-            # Espera 2 segundos antes de lançar a próxima bola
-            if tempo_atual - tempo_bola_parada >= 2000:
-
-            # Volta para a posição inicial
-                x_bola = x_inicial_bola
-                y_bola = y_pitch + altura_pitch // 2
-
-            # Prepara uma nova descida
-                velocidade_x = velocidade_descida
+                # Para a bola
+                velocidade_x = 0
                 velocidade_y = 0
-                som_bola_ar.play()
 
-            # Reseta os estados da bola
-                bola_subindo = False
-                bola_rebatida = False
-                bola_na_zona = False
-                tempo_bola_parada = 0
+                # Guarda o momento em que a bola parou
+                tempo_bola_parada = pygame.time.get_ticks()
 
-        # Verifica se a bola entrou na zona de rebatida
-        if (
-            x_bola >= x_zona
-            and x_bola <= x_zona + largura_zona
-            and not bola_na_zona
-        ):
-            bola_na_zona = True            
-        # Verifica se a bola passou pelo jogador sem ser rebatida
-        if x_bola > x_jogador and not game_over and not bola_rebatida:
-            game_over = True
-            estado_jogo = "GAME_OVER"
-            pygame.mixer.stop()   # para todos os sons
-            som_game_over.play()     # toca depois, para não ser cortado
-            
-            # Salva o recorde, se a pontuação atual for maior
-            if pontuacao > recorde:
-                recorde = pontuacao
-                with open("recorde.txt", "w") as arquivo:
-                    arquivo.write(str(recorde))
-            
-        # ------------------------------------------------------------
-        # ANIMAÇÃO DA TACADA
-        # ------------------------------------------------------------
 
-        # Controla a animação da tacada
-        if tacando:
-            # Calcula quanto tempo já passou desde o início da tacada
-            tempo_decorrido = pygame.time.get_ticks() - tempo_tacada
+                # Verifica se a bola terminou sua subida
+            if bola_subindo and velocidade_x == 0 and velocidade_y == 0:
 
-            # Primeira metade: o braço e o taco avançam
-            if tempo_decorrido < duracao_tacada / 2:
+                # Pega o tempo atual
+                tempo_atual = pygame.time.get_ticks()
 
-            # Converte o tempo em um valor de 0 até 1
-                progresso = tempo_decorrido / (duracao_tacada / 2)
+                # Espera 2 segundos antes de lançar a próxima bola
+                if tempo_atual - tempo_bola_parada >= 2000:
 
-            # Aumenta o ângulo gradualmente até 20 graus
-                angulo_tacada = 20 * progresso
+                # Volta para a posição inicial
+                    x_bola = x_inicial_bola
+                    y_bola = y_pitch + altura_pitch // 2
 
-            # Segunda metade: o braço e o taco retornam
-            else:
+                # Prepara uma nova descida
+                    velocidade_x = velocidade_descida
+                    velocidade_y = 0
+                    som_bola_ar.play()
 
-            # Calcula o progresso do retorno, de 0 até 1
-                progresso = (tempo_decorrido - duracao_tacada / 2) / (duracao_tacada / 2)
+                # Reseta os estados da bola
+                    bola_subindo = False
+                    bola_rebatida = False
+                    bola_na_zona = False
+                    tempo_bola_parada = 0
 
-            # Diminui o ângulo gradualmente até 0
-                angulo_tacada = 20 * (1 - progresso)
+            # Verifica se a bola entrou na zona de rebatida
+            if (
+                x_bola >= x_zona
+                and x_bola <= x_zona + largura_zona
+                and not bola_na_zona
+            ):
+                bola_na_zona = True            
+            # Verifica se a bola passou pelo jogador sem ser rebatida
+            if x_bola > x_jogador and not game_over and not bola_rebatida:
+                game_over = True
+                estado_jogo = "GAME_OVER"
+                pygame.mixer.stop()   # para todos os sons
+                som_game_over.play()     # toca depois, para não ser cortado
+                
+                # Salva o recorde, se a pontuação atual for maior
+                if pontuacao > recorde:
+                    recorde = pontuacao
+                    with open("recorde.txt", "w") as arquivo:
+                        arquivo.write(str(recorde))
+                
+            # ------------------------------------------------------------
+            # ANIMAÇÃO DA TACADA
+            # ------------------------------------------------------------
 
-            # Quando a animação termina, volta para a posição inicial
-            if tempo_decorrido >= duracao_tacada:
-                tacando = False
-                angulo_tacada = 0
-            
+            # Controla a animação da tacada
+            if tacando:
+                # Calcula quanto tempo já passou desde o início da tacada
+                tempo_decorrido = pygame.time.get_ticks() - tempo_tacada
+
+                # Primeira metade: o braço e o taco avançam
+                if tempo_decorrido < duracao_tacada / 2:
+
+                # Converte o tempo em um valor de 0 até 1
+                    progresso = tempo_decorrido / (duracao_tacada / 2)
+
+                # Aumenta o ângulo gradualmente até 20 graus
+                    angulo_tacada = 20 * progresso
+
+                # Segunda metade: o braço e o taco retornam
+                else:
+
+                # Calcula o progresso do retorno, de 0 até 1
+                    progresso = (tempo_decorrido - duracao_tacada / 2) / (duracao_tacada / 2)
+
+                # Diminui o ângulo gradualmente até 0
+                    angulo_tacada = 20 * (1 - progresso)
+
+                # Quando a animação termina, volta para a posição inicial
+                if tempo_decorrido >= duracao_tacada:
+                    tacando = False
+                    angulo_tacada = 0
+                
+        # ============================================================
+        # TELA
+        # ============================================================
+        tela.fill((110, 80, 55))
+
     # ============================================================
-    # TELA
+    # TELA DE INICIO
     # ============================================================
-    tela.fill((110, 80, 55))
 
-   # ============================================================
-   # TELA DE INICIO
-   # ============================================================
-
-    # Tela inicial
-    if estado_jogo == "INICIO":
-        tela.blit(tela_inicial, (0, 0))
-        desenhar_texto_contorno( "TACADA!",
-            fonte_titulo,
-            (255, 128, 0),
-            (0, 0, 0),
-            (230, 150)
-    )
-        desenhar_texto_contorno( "Quando a bola entrar na zona, clique para rebater!",
-            fonte,
-            (255, 128, 0),
-            (0, 0, 0),
-            (150, 240)
-    )
-        desenhar_texto_contorno( "Quanto mais perto do taco, melhor a tacada.",
-            fonte_pequena,
-            (255, 128, 0),
-            (0, 0, 0),
-            (190, 285)
-    )
-        desenhar_texto_contorno( "CLIQUE PARA COMEÇAR",
-            fonte,
-            (255, 128, 0),
-            (0, 0, 0),
-            (275, 400)
-    )
-   
-    # ============================================================
-    # ESTADO DO JOGO = JOGANDO
-    # ============================================================
-    if estado_jogo == "JOGANDO":
-        tela.blit(
-            arquibancada,
-            (0, 0)
-    )
+        # Tela inicial
+        if estado_jogo == "INICIO":
+            tela.blit(tela_inicial, (0, 0))
+            desenhar_texto_contorno( "TACADA!",
+                fonte_titulo,
+                (255, 128, 0),
+                (0, 0, 0),
+                (230, 150)
+        )
+            desenhar_texto_contorno( "Quando a bola entrar na zona, clique para rebater!",
+                fonte,
+                (255, 128, 0),
+                (0, 0, 0),
+                (150, 240)
+        )
+            desenhar_texto_contorno( "Quanto mais perto do taco, melhor a tacada.",
+                fonte_pequena,
+                (255, 128, 0),
+                (0, 0, 0),
+                (190, 285)
+        )
+            desenhar_texto_contorno( "CLIQUE PARA COMEÇAR",
+                fonte,
+                (255, 128, 0),
+                (0, 0, 0),
+                (275, 400)
+        )
     
-        texto_pontos = fonte.render(
-        f"PONTOS: {pontuacao}",
-        True,
-        (255, 255, 255)
+        # ============================================================
+        # ESTADO DO JOGO = JOGANDO
+        # ============================================================
+        if estado_jogo == "JOGANDO":
+            tela.blit(
+                arquibancada,
+                (0, 0)
+        )
+        
+            texto_pontos = fonte.render(
+            f"PONTOS: {pontuacao}",
+            True,
+            (255, 255, 255)
+            )
+
+            tela.blit(texto_pontos, (20, 20))
+            
+            texto_tacada = fonte.render(
+            f"Tacada: {tipo_tacada}",
+            True,
+            (255, 255, 255)
         )
 
-        tela.blit(texto_pontos, (20, 20))
-        
-        texto_tacada = fonte.render(
-        f"Tacada: {tipo_tacada}",
-        True,
-        (255, 255, 255)
-    )
+            tela.blit(texto_tacada, (20, 55))
+            
+            # ============================================================
+            # CENÁRIO
+            # ============================================================
+            
+            tela.blit(cenario, (0, 0))
+            # Pontuação e tipo da última tacada
+            texto_pontos = fonte.render(f"PONTOS: {pontuacao}", True, (138, 19, 19))
+            tela.blit(texto_pontos, (20, 20))
 
-        tela.blit(texto_tacada, (20, 55))
-        
-        # ============================================================
-        # CENÁRIO
-        # ============================================================
-        
-        tela.blit(cenario, (0, 0))
-        # Pontuação e tipo da última tacada
-        texto_pontos = fonte.render(f"PONTOS: {pontuacao}", True, (138, 19, 19))
-        tela.blit(texto_pontos, (20, 20))
+            texto_tacada = fonte.render(f"Tacada: {tipo_tacada}", True, (138, 19, 19))
+            tela.blit(texto_tacada, (20, 55))
 
-        texto_tacada = fonte.render(f"Tacada: {tipo_tacada}", True, (138, 19, 19))
-        tela.blit(texto_tacada, (20, 55))
+            ########### BOLA ##########
+            tela.blit(
+                bola_img,
+            (
+                x_bola - bola_img.get_width() // 2,
+                y_bola - bola_img.get_height() // 2
+            )   
+        )
 
-        ########### BOLA ##########
-        tela.blit(
-            bola_img,
-        (
-            x_bola - bola_img.get_width() // 2,
-            y_bola - bola_img.get_height() // 2
-        )   
-    )
+            
+            
+        ########### JOGADOR (corpo + braço + taco) ##########
 
-        
-         
-    ########### JOGADOR (corpo + braço + taco) ##########
-
-    # --- Ajustes finos ---
         # --- Ajustes finos ---
-        angulo_repouso_taco = -100
-        amplitude_taco = 90
-        angulo_repouso_braco = 6   # inclinação do braço: mão embaixo, ombro mais alto e atrás
-        amplitude_braco = 4        # o braço acompanha pouco, para não soltar do ombro
-        corpo_dx = 2                # antes 8: corpo bem encostado no ombro, só um pouco atrás
-        corpo_dy = -8               # antes -4
-        mao_dy = 9
+            # --- Ajustes finos ---
+            angulo_repouso_taco = -100
+            amplitude_taco = 90
+            angulo_repouso_braco = 6   # inclinação do braço: mão embaixo, ombro mais alto e atrás
+            amplitude_braco = 4        # o braço acompanha pouco, para não soltar do ombro
+            corpo_dx = 2                # antes 8: corpo bem encostado no ombro, só um pouco atrás
+            corpo_dy = -8               # antes -4
+            mao_dy = 9
 
-    # Progresso da tacada: 0 (parado) até 1 (taco no ponto máximo)
-        fator = angulo_tacada / 20
-        angulo_taco = angulo_repouso_taco + amplitude_taco * fator
-        angulo_braco = angulo_repouso_braco - amplitude_braco * fator
+        # Progresso da tacada: 0 (parado) até 1 (taco no ponto máximo)
+            fator = angulo_tacada / 20
+            angulo_taco = angulo_repouso_taco + amplitude_taco * fator
+            angulo_braco = angulo_repouso_braco - amplitude_braco * fator
 
-    # Mão: ponto fixo na linha da bola
-        mao = pygame.math.Vector2(x_jogador, y_jogador + mao_dy)
+        # Mão: ponto fixo na linha da bola
+            mao = pygame.math.Vector2(x_jogador, y_jogador + mao_dy)
 
-     # Braço: pivô na ponta ESQUERDA (a mão), o resto se estende para trás da linha
-        pivo_braco = (0, braco_pronto.get_height() // 2)
-        pos_braco = mao
+        # Braço: pivô na ponta ESQUERDA (a mão), o resto se estende para trás da linha
+            pivo_braco = (0, braco_pronto.get_height() // 2)
+            pos_braco = mao
 
-    # Ombro: ponta direita do braço
-        ombro = pos_braco + pygame.math.Vector2(braco_pronto.get_width(), 0).rotate(-angulo_repouso_braco)
+        # Ombro: ponta direita do braço
+            ombro = pos_braco + pygame.math.Vector2(braco_pronto.get_width(), 0).rotate(-angulo_repouso_braco)
 
-    # Corpo (desenhado primeiro, fica atrás)
-        rect_corpo = personagem_pronto.get_rect(
-            midtop=(ombro.x + corpo_dx, ombro.y + corpo_dy)
-        )
-        tela.blit(personagem_pronto, rect_corpo)
+        # Corpo (desenhado primeiro, fica atrás)
+            rect_corpo = personagem_pronto.get_rect(
+                midtop=(ombro.x + corpo_dx, ombro.y + corpo_dy)
+            )
+            tela.blit(personagem_pronto, rect_corpo)
 
-    # Braço (atrás do taco)
-        blit_com_pivo(braco_pronto, pivo_braco, pos_braco, angulo_braco)
+        # Braço (atrás do taco)
+            blit_com_pivo(braco_pronto, pivo_braco, pos_braco, angulo_braco)
 
-    # Taco: cabo na extremidade direita da imagem, preso à mão
-        pivo_taco = (taco_pronto.get_width() - 3, taco_pronto.get_height() // 2)
-        blit_com_pivo(taco_pronto, pivo_taco, mao, angulo_taco)
-        
-    # ============================================================
-    # ESTADO DO JOGO = GAME OVER
-    # ============================================================
+        # Taco: cabo na extremidade direita da imagem, preso à mão
+            pivo_taco = (taco_pronto.get_width() - 3, taco_pronto.get_height() // 2)
+            blit_com_pivo(taco_pronto, pivo_taco, mao, angulo_taco)
+            
+        # ============================================================
+        # ESTADO DO JOGO = GAME OVER
+        # ============================================================
 
-    # Tela GAME OVER
-    if estado_jogo == "GAME_OVER":
-        tela.blit(tela_game_over, (0, 0))
+        # Tela GAME OVER
+        if estado_jogo == "GAME_OVER":
+            tela.blit(tela_game_over, (0, 0))
 
-        desenhar_texto_contorno( "A bola passou pelo jogador.",
-            fonte,
-            (255, 255, 0),  # Amarelo
-            (0, 0, 0),      # Contorno preto
-            (235, 210)
-        )
+            desenhar_texto_contorno( "A bola passou pelo jogador.",
+                fonte,
+                (255, 255, 0),  # Amarelo
+                (0, 0, 0),      # Contorno preto
+                (235, 210)
+            )
 
-        desenhar_texto_contorno(
-            f"Pontuação final: {pontuacao}",
-            fonte,
-            (255, 255, 0),  # Amarelo
-            (0, 0, 0),      # Contorno preto
-            (270, 250)
-        )
-        desenhar_texto_contorno(
-            f"Recorde: {recorde}",
-            fonte,
-            (255, 255, 0),
-            (0, 0, 0),
-            (270, 340)
-        )
+            desenhar_texto_contorno(
+                f"Pontuação final: {pontuacao}",
+                fonte,
+                (255, 255, 0),  # Amarelo
+                (0, 0, 0),      # Contorno preto
+                (270, 250)
+            )
+            desenhar_texto_contorno(
+                f"Recorde: {recorde}",
+                fonte,
+                (255, 255, 0),
+                (0, 0, 0),
+                (270, 340)
+            )
 
-        desenhar_texto_contorno(
-            "F5 - Jogar novamente",
-            fonte,
-            (255, 255, 0),  # Amarelo
-            (0, 0, 0),      # Contorno preto
-            (270, 300)
-        )
-        
-        
-    # ============================================================
-    # ATUALIZAÇÃO DA TELA COM OS DESENHOS DEFINIDOS EM PYGAME.DRAW OU TELA.BLIT
-    # ============================================================
-    pygame.display.flip()  # Atualiza a tela com o que foi desenhado no draw.rect
+            desenhar_texto_contorno(
+                "F5 - Jogar novamente",
+                fonte,
+                (255, 255, 0),  # Amarelo
+                (0, 0, 0),      # Contorno preto
+                (270, 300)
+            )
+            
+            
+        # ============================================================
+        # ATUALIZAÇÃO DA TELA COM OS DESENHOS DEFINIDOS EM PYGAME.DRAW OU TELA.BLIT
+        # ============================================================
+        pygame.display.flip()  # Atualiza a tela com o que foi desenhado no draw.rect
 
-    # ============================================================
-    # LIMITAÇÃO DE FPS PARA MELHOR DESEMPENHO DE FUNCIONAMENTO
-    # ============================================================
-    clock.tick(60)  # Usamos o relógio para limitar o jogo a 60 FPS - isso impede que o jogo execute mais rápido do que a máquina consegue suportar
+        # ============================================================
+        # LIMITAÇÃO DE FPS PARA MELHOR DESEMPENHO DE FUNCIONAMENTO
+        # ============================================================
+        clock.tick(60)  # Usamos o relógio para limitar o jogo a 60 FPS - isso impede que o jogo execute mais rápido do que a máquina consegue suportar
+    
+    # OBRIGATÓRIO no pygbag: devolve o controle ao navegador a cada frame.
+    # Sem essa linha a página trava e o jogo nunca aparece.
+        await asyncio.sleep(0)
 
 # ============================================================
 # FECHAMENTO DO JOGO APÓS A FINALIZAÇÃO DO LOOP
 # ============================================================
-pygame.quit()
+    pygame.quit()
+
+asyncio.run(main())
