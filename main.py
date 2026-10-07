@@ -590,11 +590,6 @@ async def main():
         # ESTADO DO JOGO = JOGANDO
         # ============================================================
         if estado_jogo == "JOGANDO":
-            tela.blit(
-                arquibancada,
-                (0, 0)
-        )
-        
             texto_pontos = fonte.render(
             f"PONTOS: {pontuacao}",
             True,
