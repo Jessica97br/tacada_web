@@ -381,6 +381,9 @@ async def main():
     global game_over, fase, velocidade_descida, angulo_tacada, recorde
 
     while rodando:
+        # Tempo (em segundos) desde o último frame; limitado para evitar "saltos" após travadas
+        dt = min(clock.tick(60) / 1000, 0.05)
+        escala = dt * 60   # = 1.0 quando o jogo roda a 60 FPS; 2.0 se rodar a 30 FPS...
         for (
             evento
         ) in (
@@ -456,8 +459,8 @@ async def main():
             # ============================================================
             if not game_over:
 
-                x_bola = x_bola + velocidade_x
-                y_bola = y_bola + velocidade_y
+                x_bola += velocidade_x * escala
+                y_bola += velocidade_y * escala
 
             # Verifica se a bola chegou ao limite da subida
             if bola_subindo and x_bola <= x_maximo_bola and tempo_bola_parada == 0:
@@ -564,7 +567,7 @@ async def main():
                 (0, 0, 0),
                 (230, 150)
         )
-            desenhar_texto_contorno( "Quando a bola entrar na zona, clique para rebater!",
+            desenhar_texto_contorno( "Quando a bola entrar na zona, clique com o mouse para rebater!",
                 fonte,
                 (255, 128, 0),
                 (0, 0, 0),
@@ -576,7 +579,7 @@ async def main():
                 (0, 0, 0),
                 (190, 285)
         )
-            desenhar_texto_contorno( "CLIQUE PARA COMEÇAR",
+            desenhar_texto_contorno( "CLIQUE NA TELA PARA COMEÇAR",
                 fonte,
                 (255, 128, 0),
                 (0, 0, 0),
@@ -714,11 +717,6 @@ async def main():
         # ATUALIZAÇÃO DA TELA COM OS DESENHOS DEFINIDOS EM PYGAME.DRAW OU TELA.BLIT
         # ============================================================
         pygame.display.flip()  # Atualiza a tela com o que foi desenhado no draw.rect
-
-        # ============================================================
-        # LIMITAÇÃO DE FPS PARA MELHOR DESEMPENHO DE FUNCIONAMENTO
-        # ============================================================
-        clock.tick(60)  # Usamos o relógio para limitar o jogo a 60 FPS - isso impede que o jogo execute mais rápido do que a máquina consegue suportar
     
     # OBRIGATÓRIO no pygbag: devolve o controle ao navegador a cada frame.
     # Sem essa linha a página trava e o jogo nunca aparece.
