@@ -1,5 +1,5 @@
 #Para iniciar o jogo usar o cd /d D:\SSD\Python\tacada e depois : .venv\Scripts\python.exe main.py
-#Verificar como colocar ele online*Claude diz que tem uma opção de usar o proprio pybag para colocar ele no navegador, podemos testar*ver no github também*
+#Para salvar as alterações do código usar  cd /d D:\SSD\Python\tacada depois : set PYTHONUTF8=1    depois:  .venv\Scripts\python.exe -m pygbag tacada_web
 import pygame
 import random # importa o movimento aleatório 
 import math # a biblioteca de matemática do Python
@@ -565,25 +565,25 @@ async def main():
                 fonte_titulo,
                 (255, 128, 0),
                 (0, 0, 0),
-                (230, 150)
+                (350, 150)
         )
-            desenhar_texto_contorno( "Quando a bola entrar na zona, clique com o mouse para rebater!",
+            desenhar_texto_contorno( "Clique com o mouse para rebater!",
                 fonte,
                 (255, 128, 0),
                 (0, 0, 0),
-                (150, 240)
+                (250, 240)
         )
             desenhar_texto_contorno( "Quanto mais perto do taco, melhor a tacada.",
                 fonte_pequena,
                 (255, 128, 0),
                 (0, 0, 0),
-                (190, 285)
+                (250, 285)
         )
             desenhar_texto_contorno( "CLIQUE NA TELA PARA COMEÇAR",
                 fonte,
                 (255, 128, 0),
                 (0, 0, 0),
-                (275, 400)
+                (250, 400)
         )
     
         # ============================================================
